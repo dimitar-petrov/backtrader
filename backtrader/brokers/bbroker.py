@@ -670,6 +670,11 @@ class BackBroker(bt.BrokerBase):
         order.pannotated = pclose
 
     def _try_exec_limit(self, order, popen, phigh, plow, plimit):
+        if 'OCO' in order.info:
+            if order.info['OCO'].status == order.Completed:
+                self.cancel(order.info['OCO'])
+                return   # If there is OCO already completed, cancel
+
         if order.isbuy():
             if plimit >= popen:
                 # open smaller/equal than requested - buy cheaper
@@ -693,6 +698,11 @@ class BackBroker(bt.BrokerBase):
                 self._execute(order, ago=0, price=plimit)
 
     def _try_exec_stop(self, order, popen, phigh, plow, pcreated):
+        if 'OCO' in order.info:
+            if order.info['OCO'].status == order.Completed:
+                self.cancel(order.info['OCO'])
+                return   # If there is OCO already completed, cancel
+
         if order.isbuy():
             if popen >= pcreated:
                 # price penetrated with an open gap - use open
