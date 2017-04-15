@@ -138,6 +138,12 @@ class VWR(TimeFrameAnalyzerBase):
 
         sdev_p = standarddev(dts, bessel=True)
 
+        # In case the std is greater than max, adjust it
+        # other wise VWR will be big positive number
+
+        if sdev_p > self.p.sdev_max:
+            sdev_p = self.p.sdev_max
+
         vwr = rnorm100 * (1.0 - pow(sdev_p / self.p.sdev_max, self.p.tau))
         self.rets['vwr'] = vwr
 

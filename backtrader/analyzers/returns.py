@@ -101,6 +101,10 @@ class Returns(TimeFrameAnalyzerBase):
 
         self._value_end = self.strategy.broker.getvalue()
 
+        # Check if final value is smaller than zero and adjust
+        if self._value_end < 0:
+            self._value_end = 0.001
+
         # Compound return
         self.rets['rtot'] = rtot = (
             math.log(self._value_end / self._value_start))
