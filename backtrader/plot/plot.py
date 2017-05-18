@@ -36,7 +36,7 @@ import matplotlib.font_manager as mfontmgr
 import matplotlib.legend as mlegend
 import matplotlib.ticker as mticker
 
-from ..utils.py3 import range, with_metaclass
+from ..utils.py3 import range, with_metaclass, string_types, integer_types
 from .. import AutoInfoClass, MetaParams, TimeFrame, date2num
 
 from .finance import plot_candlestick, plot_ohlc, plot_volume, plot_lineonclose
@@ -200,12 +200,14 @@ class Plot_OldSync(with_metaclass(MetaParams, object)):
                     self.pinf.xdata = xdata = []
                     xreal = self.pinf.xreal
                     dts = data.datetime.plot()
+                    xtemp = list()
                     for dt in (x for x in dts if dt0 <= x <= dt1):
                         dtidx = bisect.bisect_left(xreal, dt)
                         xdata.append(dtidx)
+                        xtemp.append(dt)
 
-                    self.pinf.xstart = bisect.bisect_left(dts, xreal[xdata[0]])
-                    self.pinf.xend = bisect.bisect_right(dts, xreal[xdata[-1]])
+                    self.pinf.xstart = bisect.bisect_left(dts, xtemp[0])
+                    self.pinf.xend = bisect.bisect_right(dts, xtemp[-1])
 
                 for ind in self.dplotsup[data]:
                     self.plotind(
@@ -411,8 +413,11 @@ class Plot_OldSync(with_metaclass(MetaParams, object)):
             # plot data
             lplot = line.plotrange(self.pinf.xstart, self.pinf.xend)
 
-            if not math.isnan(lplot[-1]):
-                label += ' %.2f' % lplot[-1]
+            # Global and generic for indicator
+            if self.pinf.sch.linevalues and ind.plotinfo.plotlinevalues:
+                plotlinevalue = lineplotinfo._get('_plotvalue', True)
+                if plotlinevalue and not math.isnan(lplot[-1]):
+                    label += ' %.2f' % lplot[-1]
 
             plotkwargs = dict()
             linekwargs = lineplotinfo._getkwargs(skip_=True)
@@ -438,11 +443,14 @@ class Plot_OldSync(with_metaclass(MetaParams, object)):
 
             self.pinf.zorder[ax] = plottedline.get_zorder()
 
-            if not math.isnan(lplot[-1]):
-                # line has valid values, plot a tag for the last value
-                self.drawtag(ax, len(self.pinf.xreal), lplot[-1],
-                             facecolor='white',
-                             edgecolor=self.pinf.color(ax))
+            vtags = lineplotinfo._get('plotvaluetags', True)
+            if self.pinf.sch.valuetags and vtags:
+                linetag = lineplotinfo._get('_plotvaluetag', True)
+                if linetag and not math.isnan(lplot[-1]):
+                    # line has valid values, plot a tag for the last value
+                    self.drawtag(ax, len(self.pinf.xreal), lplot[-1],
+                                 facecolor='white',
+                                 edgecolor=self.pinf.color(ax))
 
             farts = (('_gt', operator.gt), ('_lt', operator.lt), ('', None),)
             for fcmp, fop in farts:
@@ -450,16 +458,23 @@ class Plot_OldSync(with_metaclass(MetaParams, object)):
                 fref, fcol = lineplotinfo._get(fattr, (None, None))
                 if fref is not None:
                     y1 = np.array(lplot)
-                    l2 = getattr(ind, fref)
-                    prl2 = l2.plotrange(self.pinf.xstart, self.pinf.xend)
-                    y2 = np.array(prl2)
+                    if isinstance(fref, integer_types):
+                        y2 = np.full_like(y1, fref)
+                    else:  # string, naming a line, nothing else is supported
+                        l2 = getattr(ind, fref)
+                        prl2 = l2.plotrange(self.pinf.xstart, self.pinf.xend)
+                        y2 = np.array(prl2)
                     kwargs = dict()
                     if fop is not None:
                         kwargs['where'] = fop(y1, y2)
 
+                    falpha = self.pinf.sch.fillalpha
+                    if isinstance(fcol, (list, tuple)):
+                        fcol, falpha = fcol
+
                     ax.fill_between(self.pinf.xdata, y1, y2,
                                     facecolor=fcol,
-                                    alpha=0.20,
+                                    alpha=falpha,
                                     interpolate=True,
                                     **kwargs)
 
@@ -626,8 +641,10 @@ class Plot_OldSync(with_metaclass(MetaParams, object)):
             tfname = TimeFrame.getname(data._timeframe, data._compression)
             datalabel += ' (%d %s)' % (data._compression, tfname)
 
-        datalabel += ' O:%.2f H:%2.f L:%.2f C:%.2f' % \
-                     (opens[-1], highs[-1], lows[-1], closes[-1])
+        plinevalues = getattr(data.plotinfo, 'plotlinevalues', True)
+        if self.pinf.sch.linevalues and plinevalues:
+            datalabel += ' O:%.2f H:%2.f L:%.2f C:%.2f' % \
+                         (opens[-1], highs[-1], lows[-1], closes[-1])
 
         if self.pinf.sch.style.startswith('line'):
             if axdatamaster is None:
@@ -660,8 +677,10 @@ class Plot_OldSync(with_metaclass(MetaParams, object)):
         self.pinf.zorder[ax] = plotted[0].get_zorder()
 
         # Code to place a label at the right hand side with the last value
-        self.drawtag(ax, len(self.pinf.xreal), closes[-1],
-                     facecolor='white', edgecolor=self.pinf.sch.loc)
+        vtags = data.plotinfo._get('plotvaluetags', True)
+        if self.pinf.sch.valuetags and vtags:
+            self.drawtag(ax, len(self.pinf.xreal), closes[-1],
+                         facecolor='white', edgecolor=self.pinf.sch.loc)
 
         ax.yaxis.set_major_locator(mticker.MaxNLocator(prune='both'))
         # make sure "over" indicators do not change our scale
@@ -737,6 +756,11 @@ class Plot_OldSync(with_metaclass(MetaParams, object)):
 
     def show(self):
         self.mpyplot.show()
+
+    def savefig(self, fig, filename, width=16, height=9, dpi=300, tight=True):
+        fig.set_size_inches(width, height)
+        bbox_inches = 'tight' * tight or None
+        fig.savefig(filename, dpi=dpi, bbox_inches=bbox_inches)
 
     def sortdataindicators(self, strategy):
         # These lists/dictionaries hold the subplots that go above each data

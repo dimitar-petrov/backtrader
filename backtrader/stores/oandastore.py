@@ -462,7 +462,7 @@ class OandaStore(with_metaclass(MetaSingleton, object)):
 
             self._evt_acct.set()
 
-    def order_create(self, order, **kwargs):
+    def order_create(self, order, stopside=None, takeside=None, **kwargs):
         okwargs = dict()
         okwargs['instrument'] = order.data._dataname
         okwargs['units'] = abs(order.created.size)
@@ -481,6 +481,15 @@ class OandaStore(with_metaclass(MetaSingleton, object)):
         if order.exectype == bt.Order.StopLimit:
             okwargs['lowerBound'] = order.created.pricelimit
             okwargs['upperBound'] = order.created.pricelimit
+
+        if order.exectype == bt.Order.StopTrail:
+            okwargs['trailingStop'] = order.trailamount
+
+        if stopside is not None:
+            okwargs['stopLoss'] = stopside.price
+
+        if takeside is not None:
+            okwargs['takeProfit'] = takeside.price
 
         okwargs.update(**kwargs)  # anything from the user
 
@@ -573,7 +582,7 @@ class OandaStore(with_metaclass(MetaSingleton, object)):
                 try:
                     oid = trans['tradeOpened']['id']
                 except KeyError:
-                    return  # cannot do anythin else
+                    return  # cannot do anything else
 
         elif ttype in self._X_ORDER_CREATE:
             oid = trans['id']
@@ -582,6 +591,33 @@ class OandaStore(with_metaclass(MetaSingleton, object)):
 
         elif ttype == 'ORDER_CANCEL':
             oid = trans['orderId']
+
+        elif ttype == 'TRADE_CLOSE':
+            oid = trans['id']
+            pid = trans['tradeId']
+            if pid in self._orders and False:  # Know nothing about trade
+                return  # can do nothing
+
+            # Skip above - at the moment do nothing
+            # Received directly from an event in the WebGUI for example which
+            # closes an existing position related to order with id -> pid
+            # COULD BE DONE: Generate a fake counter order to gracefully
+            # close the existing position
+            msg = ('Received TRADE_CLOSE for unknown order, possibly generated'
+                   ' over a different client or GUI')
+            self.put_notification(msg, trans)
+            return
+
+        else:  # Go aways gracefully
+            try:
+                oid = trans['id']
+            except KeyError:
+                oid = 'None'
+
+            msg = 'Received {} with oid {}. Unknown situation'
+            msg = msg.format(ttype, oid)
+            self.put_notification(msg, trans)
+            return
 
         try:
             oref = self._ordersrev[oid]
@@ -606,10 +642,11 @@ class OandaStore(with_metaclass(MetaSingleton, object)):
             if trans['side'] == 'sell':
                 size = -size
             price = trans['price']
-            self.broker._fill(oref, size, price)
+            self.broker._fill(oref, size, price, ttype=ttype)
 
         elif ttype in self._X_ORDER_CREATE:
             self.broker._accept(oref)
+            self._ordersrev[oid] = oref
 
         elif ttype in 'ORDER_CANCEL':
             reason = trans['reason']

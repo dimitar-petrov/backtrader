@@ -18,8 +18,10 @@ Contents:
    operating
    exceptions
    cerebro
+   cerebro/cheat-on-open/cheat-on-open
    strategy
    sizers/sizers
+   timers/timers
    order_target/order_target
    signal_strategy/signal_strategy
    broker
@@ -36,6 +38,7 @@ Contents:
    datafeed-develop-general/datafeed-develop-general
    extending-a-datafeed
    pandas-datafeed/pandas-datafeed
+   tradingcalendar/tradingcalendar
    data-resampling/data-resampling
    data-multitimeframe/data-multitimeframe
    data-replay/data-replay
