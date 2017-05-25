@@ -2,7 +2,7 @@
 # -*- coding: utf-8; py-indent-offset:4 -*-
 ###############################################################################
 #
-# Copyright (C) 2015, 2016, 2017 Daniel Rodriguez
+# Copyright (C) 2015, 2016 Daniel Rodriguez
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -21,7 +21,30 @@
 from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 
+import testcommon
 
-__version__ = '1.9.50.116'
+import backtrader as bt
+import backtrader.indicators as btind
 
-__btversion__ = tuple(int(x) for x in __version__.split('.'))
+chkdatas = 1
+chkvals = [
+    ['16.012364', '22.866307', '4.990750']
+]
+
+chkmin = 38
+chkind = bt.ind.TSI
+
+
+def test_run(main=False):
+    datas = [testcommon.getdata(i) for i in range(chkdatas)]
+    testcommon.runtest(datas,
+                       testcommon.TestStrategy,
+                       main=main,
+                       plot=main,
+                       chkind=chkind,
+                       chkmin=chkmin,
+                       chkvals=chkvals)
+
+
+if __name__ == '__main__':
+    test_run(main=True)

@@ -1,3 +1,22 @@
+1.9.50.117
+  - Add TrueStrengthIndicator
+  - Port YahooDownload tool to v7 API
+  - rewrite tool py3 bytes/str compatibility during write
+
+1.9.49.116
+  - Add support for new Yahoo v7 api
+  - Quandl: Allow dataset specification, apikey correction and cosmetics
+
+1.9.48.116
+  - Quandl Data Feed Online/Offline (at least for WIKI EOD)
+    - Online: bt.feeds.Quandl
+    - Offline: bt.feeds.QuandlCSV
+  - Add studies category for indicators that draw in the past
+    (study events in past price movements)
+  - PR #307 Fractal study added to studies/contributions
+  - PR #304 Timer corrections for weekdays filter
+  - Docs corrections and typos
+
 1.9.47.116
   - Add PR #303 with hook support for btrun
   - Fix regression introduced with trading calendars for replaying

@@ -22,6 +22,25 @@ from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 
 
-__version__ = '1.9.50.116'
+import backtrader as bt
+from . import EMA
 
-__btversion__ = tuple(int(x) for x in __version__.split('.'))
+
+class TrueStrengthIndicator(bt.Indicator):
+    alias = ('TSI',)
+    params = (
+        ('period1', 25),
+        ('period2', 13),
+    )
+    lines = ('tsi',)
+
+    def __init__(self):
+        pc = self.data - self.data(-1)
+
+        sm1 = bt.ind.EMA(pc, period=self.p.period1)
+        sm12 = bt.ind.EMA(sm1, period=self.p.period2)
+
+        sm2 = bt.ind.EMA(abs(pc), period=self.p.period1)
+        sm22 = bt.ind.EMA(sm2, period=self.p.period2)
+
+        self.lines.tsi = 100.0 * (sm12 / sm22)

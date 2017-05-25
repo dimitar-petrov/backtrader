@@ -21,7 +21,8 @@
 from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 
+import backtrader as bt
 
-__version__ = '1.9.50.116'
-
-__btversion__ = tuple(int(x) for x in __version__.split('.'))
+from .import fractal as fractal
+for name in fractal.__all__:
+    setattr(bt.studies, name, getattr(fractal, name))
