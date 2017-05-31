@@ -27,14 +27,11 @@ backtrader
 
 **Yahoo API Note**:
 
-  The changes in the Yahoo API have rendered the Quickstart Guide examples
-  non-functional. They will be updated soon. The new Yahoo API has additionally
-  added new things (like nulls) which still have to be addressed.
+  With release ``1.9.50.117`` data samples and YahooFinance data feeds have
+  been updated to the latest available information. But being the format not
+  documented, there could still be changes and unexpected corners.
 
-Note:
-
-  Unless it is really an issue, please post feedback/questions and other
-  things to https://community.backtrader.com
+For **feedback/questions/issues** use the `Community <https://community.backtrader.com>`_
 
 Here a snippet of a Simple Moving Average CrossOver. It can be done in several
 different ways. Use the docs (and examples) Luke!
