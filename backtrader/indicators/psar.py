@@ -33,6 +33,14 @@ class _SarStatus(object):
     af = 0.0
     ep = 0.0
 
+    def __str__(self):
+        txt = []
+        txt.append('sar: {}'.format(self.sar))
+        txt.append('tr: {}'.format(self.tr))
+        txt.append('af: {}'.format(self.af))
+        txt.append('ep: {}'.format(self.ep))
+        return '\n'.join(txt)
+
 
 class ParabolicSAR(PeriodN):
     '''
@@ -99,7 +107,7 @@ class ParabolicSAR(PeriodN):
         status.af = self.p.af
         if self.data.close[0] >= self.data.close[-1]:  # uptrend
             status.tr = not True  # uptrend when reversed
-            ep = self.data.low[-1]  # ep from prev trend
+            status.ep = self.data.low[-1]  # ep from prev trend
         else:
             status.tr = not False  # downtrend when reversed
             status.ep = self.data.high[-1]  # ep from prev trend
@@ -120,7 +128,6 @@ class ParabolicSAR(PeriodN):
 
         # Check if the sar penetrated the price to switch the trend
         if (tr and sar >= lo) or (not tr and sar <= hi):
-            # print(self.data.datetime.datetime(), 'Entry to:', not tr)
             tr = not tr  # reverse the trend
             sar = status.ep  # new sar is prev SIP (Significant price)
             ep = hi if tr else lo  # select new SIP / Extreme Price
