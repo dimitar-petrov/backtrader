@@ -2,7 +2,7 @@
 # -*- coding: utf-8; py-indent-offset:4 -*-
 ###############################################################################
 #
-# Copyright (C) 2015, 2016, 2017 Daniel Rodriguez
+# Copyright (C) 2015, 2016 Daniel Rodriguez
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -21,7 +21,33 @@
 from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 
+import testcommon
 
-__version__ = '1.9.51.118'
+import backtrader as bt
 
-__btversion__ = tuple(int(x) for x in __version__.split('.'))
+chkdatas = 1
+chkvals = [
+    ['4119.466107', '3591.732500', '3578.625259'],
+    ['4142.010000', '3638.420000', '3662.920000'],
+    ['4119.466107', '3591.732500', '3578.625259'],
+    ['4128.002500', '3614.670000', '3653.455000']
+]
+
+chkmin = 2
+chkind = bt.ind.HeikinAshi
+
+
+def test_run(main=False):
+    if False:
+        datas = [testcommon.getdata(i) for i in range(chkdatas)]
+        testcommon.runtest(datas,
+                           testcommon.TestStrategy,
+                           main=main,
+                           plot=main,
+                           chkind=chkind,
+                           chkmin=chkmin,
+                           chkvals=chkvals)
+
+
+if __name__ == '__main__':
+    test_run(main=True)
