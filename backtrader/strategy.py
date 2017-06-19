@@ -353,7 +353,7 @@ class Strategy(with_metaclass(MetaStrategy, StrategyBase)):
                 elif len(observer):
                     observer.prenext()
             else:
-                observer._next(minperstatus=minperstatus)
+                observer._next()
 
     def _next_analyzers(self, minperstatus, once=False):
         for analyzer in self.analyzers:
@@ -372,6 +372,13 @@ class Strategy(with_metaclass(MetaStrategy, StrategyBase)):
 
         for analyzer in itertools.chain(self.analyzers, self._slave_analyzers):
             analyzer._start()
+
+        for obs in self.observers:
+            if not isinstance(obs, list):
+                obs = [obs]  # support of multi-data observers
+
+            for o in obs:
+                o._start()
 
         # change operators to stage 2
         self._stage2()
@@ -570,10 +577,14 @@ class Strategy(with_metaclass(MetaStrategy, StrategyBase)):
 
         cash = self.broker.getcash()
         value = self.broker.getvalue()
+        fundvalue = self.broker.fundvalue
+        fundshares = self.broker.fundshares
 
         self.notify_cashvalue(cash, value)
+        self.notify_fund(cash, value, fundvalue, fundshares)
         for analyzer in itertools.chain(self.analyzers, self._slave_analyzers):
             analyzer._notify_cashvalue(cash, value)
+            analyzer._notify_fund(cash, value, fundvalue, fundshares)
 
     def add_timer(self, when,
                   offset=datetime.timedelta(), repeat=datetime.timedelta(),
@@ -688,7 +699,13 @@ class Strategy(with_metaclass(MetaStrategy, StrategyBase)):
 
     def notify_cashvalue(self, cash, value):
         '''
-        Receives the current cash, value status of the strategy's broker
+        Receives the current fund value, value status of the strategy's broker
+        '''
+        pass
+
+    def notify_fund(self, cash, value, fundvalue, shares):
+        '''
+        Receives the current cash, value, fundvalue and fund shares
         '''
         pass
 

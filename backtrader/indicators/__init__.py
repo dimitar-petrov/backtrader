@@ -73,6 +73,9 @@ from .trix import *
 from .tsi import *
 from .ultimateoscillator import *
 from .williams import *
+from .rmi import *
+from .awesomeoscillator import *
+from .accdecoscillator import *
 
 
 from .dv2 import *  # depends on percentrank

@@ -2,7 +2,7 @@
 # -*- coding: utf-8; py-indent-offset:4 -*-
 ###############################################################################
 #
-# Copyright (C) 2015, 2016, 2017 Daniel Rodriguez
+# Copyright (C) 2015, 2016 Daniel Rodriguez
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -21,11 +21,29 @@
 from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 
+import testcommon
 
-from .datafilter import *
-from .datafiller import *
-from .session import *
-from .calendardays import *
-from .daysteps import *
-from .bsplitter import *
-from .heikinashi import *
+import backtrader as bt
+
+chkdatas = 1
+chkvals = [
+    ['50.804206', '72.983735', '33.655941']
+]
+
+chkmin = 34
+chkind = bt.ind.AO
+
+
+def test_run(main=False):
+    datas = [testcommon.getdata(i) for i in range(chkdatas)]
+    testcommon.runtest(datas,
+                       testcommon.TestStrategy,
+                       main=main,
+                       plot=main,
+                       chkind=chkind,
+                       chkmin=chkmin,
+                       chkvals=chkvals)
+
+
+if __name__ == '__main__':
+    test_run(main=True)
