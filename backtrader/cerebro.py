@@ -313,10 +313,13 @@ class Cerebro(with_metaclass(MetaParams, object)):
         self._dataid = itertools.count(1)
 
         self._broker = BackBroker()
+        self._broker.cerebro = self
 
         self._tradingcal = None  # TradingCalendar()
 
         self._pretimers = list()
+        self._ohistory = list()
+        self._fhistory = None
 
     @staticmethod
     def iterize(iterable):
@@ -333,6 +336,71 @@ class Cerebro(with_metaclass(MetaParams, object)):
             niterable.append(elem)
 
         return niterable
+
+    def set_fund_history(self, fund):
+        '''
+        Add a history of orders to be directly executed in the broker for
+        performance evaluation
+
+          - ``fund``: is an iterable (ex: list, tuple, iterator, generator)
+            in which each element will be also an iterable (with length) with
+            the following sub-elements (2 formats are possible)
+
+            ``[datetime, share_value, net asset value]``
+
+            **Note**: it must be sorted (or produce sorted elements) by
+              datetime ascending
+
+            where:
+
+              - ``datetime`` is a python ``date/datetime`` instance or a string
+                with format YYYY-MM-DD[THH:MM:SS[.us]] where the elements in
+                brackets are optional
+              - ``share_value`` is an float/integer
+              - ``net_asset_value`` is a float/integer
+        '''
+        self._fhistory = fund
+
+    def add_order_history(self, orders, notify=True):
+        '''
+        Add a history of orders to be directly executed in the broker for
+        performance evaluation
+
+          - ``orders``: is an iterable (ex: list, tuple, iterator, generator)
+            in which each element will be also an iterable (with length) with
+            the following sub-elements (2 formats are possible)
+
+            ``[datetime, size, price]`` or ``[datetime, size, price, data]``
+
+            **Note**: it must be sorted (or produce sorted elements) by
+              datetime ascending
+
+            where:
+
+              - ``datetime`` is a python ``date/datetime`` instance or a string
+                with format YYYY-MM-DD[THH:MM:SS[.us]] where the elements in
+                brackets are optional
+              - ``size`` is an integer (positive to *buy*, negative to *sell*)
+              - ``price`` is a float/integer
+              - ``data`` if present can take any of the following values
+
+                - *None* - The 1st data feed will be used as target
+                - *integer* - The data with that index (insertion order in
+                  **Cerebro**) will be used
+                - *string* - a data with that name, assigned for example with
+                  ``cerebro.addata(data, name=value)``, will be the target
+
+          - ``notify`` (default: *True*)
+
+            If ``True`` the 1st strategy inserted in the system will be
+            notified of the artificial orders created following the information
+            from each order in ``orders``
+
+        **Note**: Implicit in the description is the need to add a data feed
+          which is the target of the orders. This is for example needed by
+          analyzers which track for example the returns
+        '''
+        self._ohistory.append((orders, notify))
 
     def notify_timer(self, timer, when, *args, **kwargs):
         '''Receives a timer notification where ``timer`` is the timer which was
@@ -852,6 +920,7 @@ class Cerebro(with_metaclass(MetaParams, object)):
         one inherited from cerebro.
         '''
         self._broker = broker
+        broker.cerebro = self
         return broker
 
     def getbroker(self):
@@ -1120,6 +1189,12 @@ class Cerebro(with_metaclass(MetaParams, object)):
             # try to activate in broker
             if hasattr(self._broker, 'set_coo'):
                 self._broker.set_coo(True)
+
+        if self._fhistory is not None:
+            self._broker.set_fund_history(self._fhistory)
+
+        for orders, onotify in self._ohistory:
+            self._broker.add_order_history(orders, onotify)
 
         self._broker.start()
 

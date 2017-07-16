@@ -1,3 +1,16 @@
+1.9.56.122
+  - Handle volume as string null in YahooFinanceData
+  - Corrections/Improvements to order history support
+  - Add fund history support
+  - Increase plotting margin of trade observers
+
+1.9.55.122
+  - Add addorder_history support to replay history of orders
+  - Add swapcloses to YahooFinanceXXX family to allow end users to control what
+    the adjusted price actually is
+  - Some docs and samples updates
+  - Change default for _nextforce to False as it should be for most indicators
+
 1.9.54.122
   - Add haDelta indicator
   - Allow indicators to disable runonce

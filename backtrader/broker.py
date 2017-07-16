@@ -66,6 +66,14 @@ class BrokerBase(with_metaclass(MetaBroker, object)):
     def stop(self):
         pass
 
+    def add_order_history(self, orders, notify=False):
+        '''Add order history. See cerebro for details'''
+        raise NotImplementedError
+
+    def set_fund_history(self, fund):
+        '''Add fund history. See cerebro for details'''
+        raise NotImplementedError
+
     def getcommissioninfo(self, data):
         '''Retrieves the ``CommissionInfo`` scheme associated with the given
         ``data``'''

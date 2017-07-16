@@ -22,11 +22,13 @@ from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
 
 import collections
+import datetime
 
 import backtrader as bt
 from backtrader.comminfo import CommInfoBase
 from backtrader.order import Order, BuyOrder, SellOrder
 from backtrader.position import Position
+from backtrader.utils.py3 import string_types, integer_types
 
 __all__ = ['BackBroker', 'BrokerBack']
 
@@ -246,6 +248,12 @@ class BackBroker(bt.BrokerBase):
         ('fundmode', False),
     )
 
+    def __init__(self):
+        super(BackBroker, self).__init__()
+        self._userhist = []
+        self._fundhist = []
+        self._fhistlast = [0.0, 0.0]  # share_value, net asset value
+
     def init(self):
         super(BackBroker, self).init()
         self.startingcash = self.cash = self.p.cash
@@ -457,7 +465,23 @@ class BackBroker(bt.BrokerBase):
             else:
                 pos_value_unlever += dvalue
 
-        self._value = self.cash + pos_value_unlever
+        if not self._fundhist:
+            self._value = v = self.cash + pos_value_unlever
+            self._fundval = self._value / self._fundshares  # update fundvalue
+        else:
+            # Try to fetch a value
+            fval, fvalue = self._process_fund_history()
+
+            self._value = fvalue
+            self.cash = fvalue - pos_value_unlever
+            self._fundval = fval
+            self._fundshares = fvalue / fval
+            lev = pos_value / (pos_value_unlever or 1.0)
+
+            # update the calculated values above to the historical values
+            pos_value_unlever = fvalue
+            pos_value = fvalue * lev
+
         self._valuemkt = pos_value_unlever
 
         self._valuelever = self.cash + pos_value
@@ -465,8 +489,6 @@ class BackBroker(bt.BrokerBase):
 
         self._leverage = pos_value / (pos_value_unlever or 1.0)
         self._unrealized = unrealized
-
-        self._fundval = self._value / self.fundshares  # update fundvalue
 
         return self._value if not lever else self._valuelever
 
@@ -513,7 +535,7 @@ class BackBroker(bt.BrokerBase):
 
         return pref
 
-    def submit(self, order):
+    def submit(self, order, check=True):
         pref = self._take_children(order)
         if pref is None:  # order has not been taken
             return order
@@ -523,13 +545,13 @@ class BackBroker(bt.BrokerBase):
 
         if order.transmit:  # if single order, sent and queue cleared
             # if parent-child, the parent will be sent, the other kept
-            rets = [self.transmit(x) for x in pc]
+            rets = [self.transmit(x, check=check) for x in pc]
             return rets[-1]  # last one is the one triggering transmission
 
         return order
 
-    def transmit(self, order):
-        if self.p.checksubmit:
+    def transmit(self, order, check=True):
+        if check and self.p.checksubmit:
             order.submit()
             self.submitted.append(order)
             self.orders.append(order)
@@ -613,41 +635,60 @@ class BackBroker(bt.BrokerBase):
             self._ocos[oref] = ocoref  # ref to group leader
             self._ocol[ocoref].append(oref)  # add to group
 
+    def add_order_history(self, orders, notify=True):
+        oiter = iter(orders)
+        o = next(oiter, None)
+        self._userhist.append([o, oiter, notify])
+
+    def set_fund_history(self, fund):
+        # iterable with the following pro item
+        # [datetime, share_value, net asset value]
+        fiter = iter(fund)
+        f = list(next(fiter))  # must not be empty
+        self._fundhist = [f, fiter]
+        self._fhistlast = f[1:]
+
+        self.set_cash(float(f[2]))
+
     def buy(self, owner, data,
             size, price=None, plimit=None,
             exectype=None, valid=None, tradeid=0, oco=None,
             trailamount=None, trailpercent=None,
             parent=None, transmit=True,
+            histnotify=False, _checksubmit=True,
             **kwargs):
 
         order = BuyOrder(owner=owner, data=data,
                          size=size, price=price, pricelimit=plimit,
                          exectype=exectype, valid=valid, tradeid=tradeid,
                          trailamount=trailamount, trailpercent=trailpercent,
-                         parent=parent, transmit=transmit)
+                         parent=parent, transmit=transmit,
+                         histnotify=histnotify)
 
         order.addinfo(**kwargs)
         self._ocoize(order, oco)
 
-        return self.submit(order)
+        return self.submit(order, check=_checksubmit)
 
     def sell(self, owner, data,
              size, price=None, plimit=None,
              exectype=None, valid=None, tradeid=0, oco=None,
              trailamount=None, trailpercent=None,
              parent=None, transmit=True,
+             histnotify=False, _checksubmit=True,
              **kwargs):
 
         order = SellOrder(owner=owner, data=data,
                           size=size, price=price, pricelimit=plimit,
                           exectype=exectype, valid=valid, tradeid=tradeid,
                           trailamount=trailamount, trailpercent=trailpercent,
-                          parent=parent, transmit=transmit)
+                          parent=parent, transmit=transmit,
+                          histnotify=histnotify)
 
         order.addinfo(**kwargs)
         self._ocoize(order, oco)
 
-        return self.submit(order)
+        return self.submit(order, check=_checksubmit)
 
     def _execute(self, order, ago=None, price=None, cash=None, position=None,
                  dtcoc=None):
@@ -801,6 +842,9 @@ class BackBroker(bt.BrokerBase):
 
     def notify(self, order):
         self.notifs.append(order.clone())
+
+    def _try_exec_historical(self, order):
+        self._execute(order, ago=0, price=order.created.price)
 
     def _try_exec_market(self, order, popen, phigh, plow):
         ago = 0
@@ -1029,6 +1073,101 @@ class BackBroker(bt.BrokerBase):
                                      popen, phigh, plow, pclose,
                                      pcreated, plimit)
 
+        elif order.exectype == Order.Historical:
+            self._try_exec_historical(order)
+
+    def _process_fund_history(self):
+        fhist = self._fundhist  # [last element, iterator]
+        f, funds = fhist
+        if not f:
+            return self._fhistlast
+
+        dt = f[0]  # date/datetime instance
+        if isinstance(dt, string_types):
+            dtfmt = '%Y-%m-%d'
+            if 'T' in dt:
+                dtfmt += 'T%H:%M:%S'
+                if '.' in dt:
+                    dtfmt += '.%f'
+            dt = datetime.datetime.strptime(dt, dtfmt)
+            f[0] = dt  # update value
+
+        elif isinstance(dt, datetime.datetime):
+            pass
+        elif isinstance(dt, datetime.date):
+            dt = datetime.datetime(year=dt.year, month=dt.month, day=dt.day)
+            f[0] = dt  # Update the value
+
+        # Synchronization with the strategy is not possible because the broker
+        # is called before the strategy advances. The 2 lines below would do it
+        # if possible
+        # st0 = self.cerebro.runningstrats[0]
+        # if dt <= st0.datetime.datetime():
+        self._fhistlast = f[1:]
+        fhist[0] = list(next(funds, []))
+
+        return self._fhistlast
+
+    def _process_order_history(self):
+        for uhist in self._userhist:
+            uhorder, uhorders, uhnotify = uhist
+            while uhorder is not None:
+                uhorder = list(uhorder)  # to support assignment (if tuple)
+                try:
+                    dataidx = uhorder[3]  # 2nd field
+                except IndexError:
+                    dataidx = None  # Field not present, use default
+
+                if dataidx is None:
+                    d = self.cerebro.datas[0]
+                elif isinstance(dataidx, integer_types):
+                    d = self.cerebro.datas[dataidx]
+                else:  # assume string
+                    d = self.cerebro.datasbyname[dataidx]
+
+                if not len(d):
+                    break  # may start later as oter data feeds
+
+                dt = uhorder[0]  # date/datetime instance
+                if isinstance(dt, string_types):
+                    dtfmt = '%Y-%m-%d'
+                    if 'T' in dt:
+                        dtfmt += 'T%H:%M:%S'
+                        if '.' in dt:
+                            dtfmt += '.%f'
+                    dt = datetime.datetime.strptime(dt, dtfmt)
+                    uhorder[0] = dt
+                elif isinstance(dt, datetime.datetime):
+                    pass
+                elif isinstance(dt, datetime.date):
+                    dt = datetime.datetime(year=dt.year,
+                                           month=dt.month,
+                                           day=dt.day)
+                    uhorder[0] = dt
+
+                if dt > d.datetime.datetime():
+                    break  # cannot execute yet 1st in queue, stop processing
+
+                size = uhorder[1]
+                price = uhorder[2]
+                owner = self.cerebro.runningstrats[0]
+                if size > 0:
+                    o = self.buy(owner=owner, data=d,
+                                 size=size, price=price,
+                                 exectype=Order.Historical,
+                                 histnotify=uhnotify,
+                                 _checksubmit=False)
+
+                elif size < 0:
+                    o = self.sell(owner=owner, data=d,
+                                  size=abs(size), price=price,
+                                  exectype=Order.Historical,
+                                  histnotify=uhnotify,
+                                  _checksubmit=False)
+
+                # update to next potential order
+                uhist[0] = uhorder = next(uhorders, None)
+
     def next(self):
         while self._toactivate:
             self._toactivate.popleft().activate()
@@ -1048,6 +1187,8 @@ class BackBroker(bt.BrokerBase):
                 pos.datetime = dt0  # mark last credit operation
 
         self.cash -= credit
+
+        self._process_order_history()
 
         # Iterate once over all elements of the pending queue
         self.pending.append(None)
